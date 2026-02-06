@@ -60,6 +60,14 @@ first line'''"""
     assert result["key"] == "first line"
 
 
+# --- Allowed escape sequences in basic string (TOML 1.0: \b \t \n \f \r \" \\ \uXXXX \UXXXXXXXX) ---
+
+def test_basic_string_backspace_and_form_feed():
+    """\\b and \\f are valid escapes in basic strings."""
+    assert fasttoml.loads('k = "a\\bb"')["k"] == "a\bb"
+    assert fasttoml.loads('k = "a\\fc"')["k"] == "a\fc"
+
+
 # --- Unicode escapes in basic string ---
 
 def test_unicode_escape_4digit():

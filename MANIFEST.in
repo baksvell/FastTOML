@@ -1,0 +1,6 @@
+include LICENSE
+include README.md
+recursive-include include *
+recursive-include src *.cpp *.hpp
+recursive-include fasttoml *.py
+recursive-include tests *.py

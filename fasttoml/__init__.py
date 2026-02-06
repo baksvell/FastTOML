@@ -5,6 +5,10 @@ This module provides a fast TOML parser implemented in C++ with SIMD optimizatio
 It aims to be a drop-in replacement for existing TOML libraries with significantly
 better performance.
 """
+from __future__ import annotations
+
+import re
+from typing import BinaryIO, TextIO, Union
 
 try:
     from ._native import loads as _loads
@@ -14,11 +18,27 @@ except ImportError as e:
         "Make sure the package is properly installed."
     ) from e
 
-__version__ = "0.1.0"
+def _get_version() -> str:
+    try:
+        from importlib.metadata import version
+        return version("fasttoml")
+    except Exception:
+        pass
+    try:
+        from pathlib import Path
+        path = Path(__file__).resolve().parents[1] / "pyproject.toml"
+        if path.exists():
+            m = re.search(r'version\s*=\s*"([^"]+)"', path.read_text(encoding="utf-8"))
+            return m.group(1) if m else "0.0.0"
+    except Exception:
+        pass
+    return "0.0.0"
+
+__version__ = _get_version()
 
 from ._dumps import dumps, dump
 
-__all__ = ["loads", "load", "dumps", "dump"]
+__all__ = ["loads", "load", "dumps", "dump", "__version__"]
 
 
 def loads(s: str) -> dict:
@@ -47,25 +67,20 @@ def loads(s: str) -> dict:
         raise ValueError(str(e)) from e
 
 
-def load(fp) -> dict:
+def load(fp: Union[str, BinaryIO, TextIO]) -> dict:
     """
     Parse a TOML file and return a dictionary.
-    
+
     Args:
-        fp: File-like object or file path (string)
-        
+        fp: File path (str) or file-like object open for reading (text or binary).
+
     Returns:
-        dict: Parsed TOML data as a Python dictionary
-        
+        Parsed TOML data as a Python dictionary.
+
     Raises:
-        ValueError: If parsing fails
-        FileNotFoundError: If file doesn't exist
-        IOError: If file can't be read
-        
-    Example:
-        >>> import fasttoml
-        >>> with open('config.toml', 'r') as f:
-        ...     data = fasttoml.load(f)
+        ValueError: If the content is not valid TOML.
+        FileNotFoundError: If fp is a path and the file does not exist.
+        OSError: If the file cannot be read.
     """
     if isinstance(fp, str):
         # File path provided

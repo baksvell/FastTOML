@@ -1,5 +1,9 @@
 # FastTOML
 
+[![CI](https://github.com/baksvell/FastTOML/actions/workflows/ci.yml/badge.svg)](https://github.com/baksvell/FastTOML/actions)
+[![PyPI version](https://img.shields.io/pypi/v/fasttoml.svg)](https://pypi.org/project/fasttoml/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 Fast TOML parser for Python with SIMD optimizations.
 
 ## Features
@@ -61,6 +65,8 @@ pytest tests/test_benchmark.py -v --benchmark-only
 - **API**: `loads(s)`, `load(fp)`, `dumps(obj)`, and `dump(obj, fp)` are provided. Serialization (`dumps`/`dump`) is implemented in Python.
 - **Types**: Offset datetimes (with `Z` or `+/-HH:MM`) are returned as timezone-aware `datetime` (UTC). Local datetime (no offset, e.g. `1979-05-27T07:32:00`) is returned as a string for toml-test/tagged-JSON compatibility. Date-only and time-only TOML values are returned as strings (`"YYYY-MM-DD"`, `"HH:MM:SS"`).
 - **Invalid TOML**: Invalid input raises `ValueError` with an error message; the parser does not crash on malformed data.
+- **Strict date/time**: Dates and times are validated (month 01–12, day within month including leap years, hour 00–23, minute/second 00–59 or 60 for leap second); trailing garbage after a date or time value is rejected.
+- **Basic string escapes**: All TOML 1.0 escape sequences are supported (`\b` `\t` `\n` `\f` `\r` `\"` `\\` `\uXXXX` `\UXXXXXXXX`). Invalid escapes (e.g. `\x`) raise `ValueError`.
 
 ## Requirements
 
@@ -89,8 +95,16 @@ pytest tests/test_benchmark.py -v --benchmark-only
 #   python scripts/run_toml_test.py
 # Option B: pytest over cloned toml-test (clone once, then)
 #   pytest tests/test_toml_test_suite.py -v
-#   (uses .toml-test/ if present, else clones from GitHub; by default 80 valid + 10 invalid; TOML_TEST_FULL=1 runs all valid with 9 decoder-format skips, invalid still limited to 10)
+#   (uses .toml-test/ if present, else clones from GitHub; by default 80 valid + 200 invalid; TOML_TEST_FULL=1 runs all valid with 9 skips; TOML_TEST_INVALID_FULL=1 runs all invalid; accepted invalid have a known-gap skip set)
 ```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, tests, and how to submit changes.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 ## License
 

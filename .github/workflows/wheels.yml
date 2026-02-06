@@ -1,0 +1,33 @@
+# Build multi-platform wheels with cibuildwheel (optional: run on release or manually).
+name: Wheels
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+jobs:
+  build-wheels:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.16.2
+        env:
+          CIBW_PROJECT_REQUIRES_PYTHON: ">=3.10"
+          CIBW_BUILD: "cp310-* cp311-* cp312-*"
+          # Skip 32-bit and obscure platforms to keep build time reasonable
+          CIBW_SKIP: "*-win32 *-manylinux_i686 *-musllinux_* pp*-* *-aarch64"
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: ./wheelhouse/*.whl

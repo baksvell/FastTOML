@@ -815,6 +815,11 @@ static bool parse_int(const char*& ptr, const char* end, int min_digits, int max
     return true;
 }
 
+// True if character can follow a date/time value (TOML value terminator).
+static bool is_value_terminator(char c) {
+    return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == ',' || c == ']' || c == '}' || c == '#';
+}
+
 // Max day in month (1-12); leap year for February.
 static int max_day_in_month(int64_t year, int64_t month) {
     static const int days_in_month[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
@@ -857,10 +862,18 @@ std::optional<TomlValue> TomlParser::try_parse_datetime() {
         if (!parse_int(p, end_, 4, 4, year)) { current_ = start; return std::nullopt; }
         if (p >= end_ || *p != '-') { current_ = start; return std::nullopt; }
         ++p;
-        if (!parse_int(p, end_, 2, 2, month) || month < 1 || month > 12) { current_ = start; return std::nullopt; }
+        if (!parse_int(p, end_, 2, 2, month) || month < 1 || month > 12) {
+            set_error("Invalid date: month must be 01-12");
+            current_ = start;
+            return std::nullopt;
+        }
         if (p >= end_ || *p != '-') { current_ = start; return std::nullopt; }
         ++p;
-        if (!parse_int(p, end_, 2, 2, day) || day < 1 || day > 31) { current_ = start; return std::nullopt; }
+        if (!parse_int(p, end_, 2, 2, day) || day < 1 || day > 31) {
+            set_error("Invalid date: day must be 01-31");
+            current_ = start;
+            return std::nullopt;
+        }
         if (day > max_day_in_month(year, month)) {
             set_error("Invalid date: day out of range for month");
             current_ = start;
@@ -883,19 +896,36 @@ std::optional<TomlValue> TomlParser::try_parse_datetime() {
         } else if (*p == 'T' || *p == 't') {
             ++p;
         } else {
-            // Date only (e.g. newline or # after date)
+            // Date only: must not have trailing garbage (e.g. 1979-01-01x)
+            if (p < end_ && !is_value_terminator(*p)) {
+                set_error("Invalid date: unexpected character after date");
+                current_ = start;
+                return std::nullopt;
+            }
             current_ = p;
-            return TomlValue(String(start, p));
+            return TomlValue(String(start, start + 10));
         }
         if (end_ - p >= 8) {
             int64_t hour, minute, second = 0;
-            if (!parse_int(p, end_, 2, 2, hour) || hour > 23) { current_ = start; return std::nullopt; }
+            if (!parse_int(p, end_, 2, 2, hour) || hour > 23) {
+                set_error("Invalid datetime: hour must be 00-23");
+                current_ = start;
+                return std::nullopt;
+            }
             if (p >= end_ || *p != ':') { current_ = start; return std::nullopt; }
             ++p;
-            if (!parse_int(p, end_, 2, 2, minute) || minute > 59) { current_ = start; return std::nullopt; }
+            if (!parse_int(p, end_, 2, 2, minute) || minute > 59) {
+                set_error("Invalid datetime: minute must be 00-59");
+                current_ = start;
+                return std::nullopt;
+            }
             if (p >= end_ || *p != ':') { current_ = start; return std::nullopt; }
             ++p;
-            if (!parse_int(p, end_, 2, 2, second) || second > 60) { current_ = start; return std::nullopt; }
+            if (!parse_int(p, end_, 2, 2, second) || second > 60) {
+                set_error("Invalid datetime: second must be 00-60");
+                current_ = start;
+                return std::nullopt;
+            }
             double subsecond = 0.0;
             if (p < end_ && *p == '.') {
                 ++p;
@@ -952,9 +982,19 @@ std::optional<TomlValue> TomlParser::try_parse_datetime() {
                 tp -= minutes(offset_minutes);
                 return TomlValue(DateTimeOffset{tp, offset_minutes});
             }
-            // Local datetime (no offset): preserve as string for datetime-local in tagged JSON
+            // Local datetime (no offset): preserve as string; reject trailing garbage
+            if (p < end_ && !is_value_terminator(*p)) {
+                set_error("Invalid datetime: unexpected character after time");
+                current_ = start;
+                return std::nullopt;
+            }
             current_ = p;
             return TomlValue(String(start, p));
+        }
+        if (p < end_ && !is_value_terminator(*p)) {
+            set_error("Invalid date: unexpected character after date");
+            current_ = start;
+            return std::nullopt;
         }
         current_ = p;
         return TomlValue(String(start, p));
@@ -966,16 +1006,33 @@ std::optional<TomlValue> TomlParser::try_parse_datetime() {
         current_[5] == ':' && std::isdigit(current_[6]) && std::isdigit(current_[7])) {
         const char* p = current_;
         int64_t h, m, s;
-        if (!parse_int(p, end_, 2, 2, h) || h > 23) { current_ = start; return std::nullopt; }
+        if (!parse_int(p, end_, 2, 2, h) || h > 23) {
+            set_error("Invalid time: hour must be 00-23");
+            current_ = start;
+            return std::nullopt;
+        }
         if (p >= end_ || *p != ':') { current_ = start; return std::nullopt; }
         ++p;
-        if (!parse_int(p, end_, 2, 2, m) || m > 59) { current_ = start; return std::nullopt; }
+        if (!parse_int(p, end_, 2, 2, m) || m > 59) {
+            set_error("Invalid time: minute must be 00-59");
+            current_ = start;
+            return std::nullopt;
+        }
         if (p >= end_ || *p != ':') { current_ = start; return std::nullopt; }
         ++p;
-        if (!parse_int(p, end_, 2, 2, s) || s > 60) { current_ = start; return std::nullopt; }
+        if (!parse_int(p, end_, 2, 2, s) || s > 60) {
+            set_error("Invalid time: second must be 00-60");
+            current_ = start;
+            return std::nullopt;
+        }
         if (p < end_ && *p == '.') {
             ++p;
             while (p < end_ && std::isdigit(*p)) ++p;
+        }
+        if (p < end_ && !is_value_terminator(*p)) {
+            set_error("Invalid time: unexpected character after time");
+            current_ = start;
+            return std::nullopt;
         }
         current_ = p;
         return TomlValue(String(start, p));
@@ -1036,17 +1093,22 @@ std::string TomlParser::parse_escape_sequence() {
         set_error("Unexpected end of string in escape sequence");
         return "";
     }
-    
     char c = advance();
     switch (c) {
+        case 'b': return "\b";
         case 't': return "\t";
         case 'n': return "\n";
+        case 'f': return "\f";
         case 'r': return "\r";
         case '"': return "\"";
         case '\\': return "\\";
         case 'u': return parse_unicode_escape(4);
         case 'U': return parse_unicode_escape(8);
-        default: return std::string(1, c);
+        default: {
+            set_error("Invalid escape sequence in string: \\" + std::string(1, c) +
+                      " (allowed: \\b \\t \\n \\f \\r \\\" \\\\ \\uXXXX \\UXXXXXXXX)");
+            return "";
+        }
     }
 }
 
