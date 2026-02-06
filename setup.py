@@ -53,10 +53,13 @@ def get_compile_args():
     extra_args.extend(get_simd_flags())
     
     # C++17 standard
-    if sys.platform != 'win32':
-        extra_args.extend(['-std=c++17', '-O3', '-march=native'])
-    else:
+    if sys.platform == 'win32':
         extra_args.extend(['/std:c++17', '/O2', '/EHsc'])
+    else:
+        extra_args.extend(['-std=c++17', '-O3'])
+        # -march=native on macOS can yield 'apple-m3' which older Xcode/clang don't support
+        if sys.platform != 'darwin':
+            extra_args.append('-march=native')
     
     return extra_args
 
